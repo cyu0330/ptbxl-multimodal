@@ -1,0 +1,27 @@
+seed: 42
+
+data:
+  base_dir: /Users/yuzi/Desktop/physionet.org/files/ptb-xl/1.0.3
+  fs: 500
+  leads: 12
+  normalize: per_lead # 每导联标准化
+  min_occ: 50 # 标签最少出现次数
+  labels: ["MI", "STTC", "AF"] # 先做三个大类
+  split: "strat_fold_9" # 用 PTB-XL 自带 strat_fold
+
+train:
+  batch_size: 64
+  epochs: 30
+  optimizer: "adamw"
+  lr: 1.5e-3
+  weight_decay: 1e-4
+  amp: true
+  early_stop_patience: 8
+
+metrics:
+  main: "auprc_macro"
+  thresholds: "search_per_class"
+
+log:
+  out_dir: "outputs"
+  tb: true
