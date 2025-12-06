@@ -11,7 +11,7 @@ data:
 
 train:
   batch_size: 64
-  epochs: 5
+  epochs: 30
   optimizer: "adamw"
   lr: 1.0e-4 # ⚠️ Demo 模型一般 LR 设小一点更稳定
   weight_decay: 1e-4

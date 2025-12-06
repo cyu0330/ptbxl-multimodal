@@ -1,0 +1,21 @@
+seed: 42
+
+data:
+  base_dir: /Users/yuzi/Desktop/physionet.org/files/ptb-xl/1.0.3
+  normalize: per_lead
+
+train:
+  batch_size: 32
+  epochs: 4
+  lr: 1e-3
+  weight_decay: 1e-4
+  num_workers: 0
+
+model:
+  ecg:
+    in_leads: 12
+    feat_dim: 256
+
+log:
+  out_dir: outputs/af_binary
+  run_name: af_binary_ecg
