@@ -49,7 +49,9 @@ def main(args):
         normalize=data_cfg.get("normalize", "per_lead"),
     )
 
-    print(f"[INFO] Train size: {len(train_ds)} | Val size: {len(val_ds)}")
+    print("[ECG+Demo] train size =", len(train_ds))
+    print("[ECG+Demo] val size   =", len(val_ds))
+
 
     # 4. dataloaders
     train_loader = DataLoader(

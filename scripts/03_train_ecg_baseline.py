@@ -1,11 +1,9 @@
 import argparse
 import yaml
 import os
-
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-
 from src.utils.seed import set_seed
 from src.datasets.ptbxl import PTBXLDataset
 from src.models.ecg_cnn import ECGCNN
@@ -31,6 +29,9 @@ def main(args):
                             normalize=data_cfg.get("normalize", "per_lead"))
     val_ds = PTBXLDataset(base_dir, split="val", classes=classes,
                           normalize=data_cfg.get("normalize", "per_lead"))
+    print("[Baseline] train size =", len(train_ds))
+    print("[Baseline] val size   =", len(val_ds))
+
 
     train_loader = DataLoader(
         train_ds,
@@ -50,7 +51,6 @@ def main(args):
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 3. 模型 & 优化器
-        # 3. 模型 & 优化器
     model = ECGCNN(
         in_leads=model_cfg.get("in_leads", 12),
         feat_dim=model_cfg.get("feat_dim", 256),

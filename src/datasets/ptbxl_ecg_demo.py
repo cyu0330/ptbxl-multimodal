@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 import wfdb
 
 from src.utils.label_maps import load_metadata, build_label_matrix
+from src.datasets.ptbxl import _is_valid_ecg   # reuse ECG validity check
 
 
 def _load_ecg(record_path: str) -> np.ndarray:
@@ -67,20 +68,30 @@ class PTBXLECGDemoDataset(Dataset):
         else:  # "train"
             df_split = df[df["strat_fold"] <= 8].reset_index(drop=True)
 
-        # 3) Drop rows with missing age or sex (rare, but cleaner)
         num_before = len(df_split)
-        mask = df_split["age"].notna() & df_split["sex"].notna()
-        df_split = df_split.loc[mask].reset_index(drop=True)
-        num_after = len(df_split)
+
+        # 3) Filter to only records with valid ECG files (same logic as PTBXLDataset)
+        mask_valid = df_split["filename_hr"].apply(
+            lambda rel: _is_valid_ecg(base_dir, rel)
+        )
+        df_split = df_split.loc[mask_valid].reset_index(drop=True)
+        num_after_valid = len(df_split)
+
+        # 4) Drop rows with missing age or sex (rare, but cleaner)
+        mask_demo = df_split["age"].notna() & df_split["sex"].notna()
+        df_split = df_split.loc[mask_demo].reset_index(drop=True)
+        num_after_demo = len(df_split)
 
         print(
-            f"[PTBXLECGDemoDataset] split={split} | total={num_before} | "
-            f"after_drop_missing_age_sex={num_after} | dropped={num_before - num_after}"
+            f"[PTBXLECGDemoDataset] split={split} | "
+            f"total={num_before} | valid_ecg={num_after_valid} | "
+            f"after_drop_missing_age_sex={num_after_demo} | "
+            f"dropped={num_before - num_after_demo}"
         )
 
         self.df = df_split
 
-        # 4) Build label matrix for the chosen superclasses
+        # 5) Build label matrix for the chosen superclasses
         self.y = build_label_matrix(self.df, scp, classes)
 
     def __len__(self) -> int:
@@ -100,10 +111,10 @@ class PTBXLECGDemoDataset(Dataset):
 
         - age >= 300 (anonymized 90+ years) -> clamp to 90
         - age_norm   = age / 100.0
-        - height_norm= height_cm / 250.0  (missing -> 0)
-        - weight_norm= weight_kg / 200.0  (missing -> 0)
+        - height_norm= height_cm / 250.0  (missing/NaN/<=0 -> 0)
+        - weight_norm= weight_kg / 200.0  (missing/NaN/<=0 -> 0)
         - sex_id: M=0, F=1, other/unknown=2
-        - pacemaker: 0/1
+        - pacemaker: 0/1 (NaN/Inf -> 0)
         """
         # ----- age -----
         age = row.get("age", np.nan)
@@ -112,10 +123,13 @@ class PTBXLECGDemoDataset(Dataset):
         except Exception:
             age = 0.0
 
+        # Handle NaN/Inf and negatives
+        if (not np.isfinite(age)) or (age < 0):
+            age = 0.0
+
+        # Handle anonymized 300+
         if age >= 300:       # PTB-XL: age>89 anonymized as 300
             age = 90.0       # clamp to 90
-        elif age < 0:
-            age = 0.0
 
         age_norm = age / 100.0   # roughly [0, 0.9]
 
@@ -135,7 +149,7 @@ class PTBXLECGDemoDataset(Dataset):
         except Exception:
             height = 0.0
 
-        if not np.isfinite(height) or height <= 0:
+        if (not np.isfinite(height)) or (height <= 0):
             height = 0.0
 
         height_norm = height / 250.0   # assume < 250 cm
@@ -147,7 +161,7 @@ class PTBXLECGDemoDataset(Dataset):
         except Exception:
             weight = 0.0
 
-        if not np.isfinite(weight) or weight <= 0:
+        if (not np.isfinite(weight)) or (weight <= 0):
             weight = 0.0
 
         weight_norm = weight / 200.0   # assume < 200 kg
@@ -157,6 +171,9 @@ class PTBXLECGDemoDataset(Dataset):
         try:
             pacemaker_val = float(pacemaker)
         except Exception:
+            pacemaker_val = 0.0
+
+        if not np.isfinite(pacemaker_val):
             pacemaker_val = 0.0
 
         demo = np.array(
@@ -182,7 +199,7 @@ class PTBXLECGDemoDataset(Dataset):
 
         # Demographic vector
         x_demo = self._build_demo_vector(row)      # [5]
-
+        x_demo = np.zeros_like(x_demo, dtype=np.float32)
         # Labels
         y = self.y[idx]                            # [num_labels]
 

@@ -6,12 +6,12 @@ data:
   leads: 12
   normalize: per_lead
   min_occ: 50
-  labels: ["MI", "STTC", "HYP", "CD", "NORM"] # 建议直接用5大类
+  labels: ["MI", "STTC", "HYP", "CD", "NORM"]
   split: "strat_fold_9"
 
 train:
   batch_size: 64
-  epochs: 30
+  epochs: 1
   optimizer: "adamw"
   lr: 1.5e-3
   weight_decay: 1e-4
