@@ -1,9 +1,11 @@
+# scripts/03_train_ecg_baseline.py
+
 import argparse
-import yaml
 import os
 import csv
 from datetime import datetime
 
+import yaml
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -13,12 +15,11 @@ from src.datasets.ptbxl import PTBXLDataset
 from src.models.ecg_cnn import ECGCNN
 from src.training.loop import train_one_epoch, eval_one_epoch
 
-import os
-import torch
-
+# 可选：让 PyTorch 针对当前 GPU 架构编译
 os.environ["TORCH_CUDA_ARCH_LIST"] = "native"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("[INFO] Device:", device)
+print("[INFO] Device (script import):", device)
+
 
 def log_epoch_to_csv(csv_path, run_name, epoch, train_loss, val_metrics, ckpt_path, config_path):
     """
@@ -73,12 +74,30 @@ def main(args):
     classes = data_cfg.get("labels", ["MI", "STTC", "HYP", "CD", "NORM"])
     base_dir = data_cfg["base_dir"]
 
-    # out_dir / logs / metrics
-    out_dir = log_cfg["out_dir"]
+    # === 输出目录结构 ===
+    # 希望最终为：
+    # outputs/
+    #   ecg_baseline/
+    #     ckpts/
+    #     logs/
+    root_out_dir = log_cfg.get("out_dir", "outputs")          # e.g. "outputs"
+    run_name = log_cfg.get("run_name", "ecg_baseline")        # 子目录名
+
+    # 主目录：outputs/ecg_baseline
+    out_dir = os.path.join(root_out_dir, run_name)
+
+    # 日志目录：outputs/ecg_baseline/logs
     log_dir = os.path.join(out_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
+
+    # 指标 CSV：outputs/ecg_baseline/logs/metrics_ecg_baseline.csv
     metrics_csv = os.path.join(log_dir, "metrics_ecg_baseline.csv")
-    run_name = log_cfg.get("run_name", "ecg_baseline")
+
+    print("[INFO] Using config:", args.config)
+    print("[INFO] Classes:", classes)
+    print("[INFO] Base dir:", base_dir)
+    print("[INFO] Out dir:", out_dir)
+    print("[INFO] Metrics CSV:", metrics_csv)
 
     # 2. 数据集 & DataLoader
     train_ds = PTBXLDataset(
@@ -100,19 +119,19 @@ def main(args):
         train_ds,
         batch_size=train_cfg["batch_size"],
         shuffle=True,
-        num_workers=4,
+        num_workers=train_cfg.get("num_workers", 4),
         pin_memory=False,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=4,
+        num_workers=train_cfg.get("num_workers", 4),
         pin_memory=False,
     )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[INFO] Device: {device}")
+    print(f"[INFO] Device (training): {device}")
 
     # 3. 模型 & 优化器
     model = ECGCNN(
@@ -167,6 +186,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="configs/ecg_baseline.yaml")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/ecg_baseline.yaml",
+        help="Path to YAML config file.",
+    )
     args = parser.parse_args()
     main(args)
