@@ -13,6 +13,12 @@ from src.datasets.ptbxl import PTBXLDataset
 from src.models.ecg_cnn import ECGCNN
 from src.training.loop import train_one_epoch, eval_one_epoch
 
+import os
+import torch
+
+os.environ["TORCH_CUDA_ARCH_LIST"] = "native"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("[INFO] Device:", device)
 
 def log_epoch_to_csv(csv_path, run_name, epoch, train_loss, val_metrics, ckpt_path, config_path):
     """

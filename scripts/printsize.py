@@ -1,7 +1,8 @@
 from src.datasets.ptbxl import PTBXLDataset
 from src.datasets.ptbxl_ecg_demo import PTBXLECGDemoDataset
 
-base_dir = "/Users/yuzi/Desktop/physionet.org/files/ptb-xl/1.0.3"
+
+base_dir = "C:\\Users\\Administrator\\Desktop\\ptb-xl\\1.0.3"
 classes = ["MI", "STTC", "HYP", "CD", "NORM"]
 
 print("=== Baseline datasets ===")

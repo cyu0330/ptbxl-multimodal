@@ -1,86 +1,86 @@
-# src/models/ecg_demo.py
+# src/training/loop_demo.py
 
+import numpy as np
 import torch
-import torch.nn as nn
+from torch.nn import BCEWithLogitsLoss
+from tqdm import tqdm
 
-from src.models.ecg_cnn import ECGCNN
+from src.training.metrics import compute_metrics
 
 
-class DemoEncoder(nn.Module):
+bce_loss_fn = BCEWithLogitsLoss()
+
+
+def train_one_epoch_demo(model, loader, optimizer, device):
     """
-    Simple MLP to embed demographic vector:
-    [age_norm, sex_id, height_norm, weight_norm, pacemaker]
+    Clean training loop for ECG + Demo model.
+    Only one loss:
+        loss = BCE(logits, y)
     """
-    def __init__(self, in_dim: int = 5, hidden_dim: int = 32, out_dim: int = 64):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, out_dim),
-            nn.ReLU(inplace=True),
-        )
+    model.train()
+    total_loss = 0.0
+    n_batches = 0
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        x: [B, 5]
-        return: [B, out_dim]
-        """
-        return self.net(x)
+    pbar = tqdm(loader, desc="Train-ECG+Demo", leave=False)
+
+    for x_ecg, x_demo, y in pbar:
+        x_ecg = x_ecg.to(device)
+        x_demo = x_demo.to(device)
+        y = y.to(device)
+
+        optimizer.zero_grad()
+
+        logits = model(x_ecg, x_demo)      # forward
+        loss = bce_loss_fn(logits, y)      # single loss
+
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        n_batches += 1
+
+        pbar.set_postfix(loss=loss.item())
+
+    return total_loss / max(1, n_batches)
 
 
-class ECGDemoModel(nn.Module):
+
+
+def eval_one_epoch_demo(model, loader, device):
     """
-    Multimodal model: ECG + demographics (age, sex, height, weight, pacemaker).
+    Clean evaluation for ECG + Demo.
     """
-    def __init__(
-        self,
-        num_labels: int,
-        ecg_feat_dim: int = 256,
-        demo_feat_dim: int = 64,
-        in_leads: int = 12,
-    ):
-        super().__init__()
+    model.eval()
+    total_loss = 0.0
+    n_batches = 0
 
-        # ECG encoder (reuse your CNN)
-        # We will use (logits, z) where z is the ECG feature.
-        self.ecg_encoder = ECGCNN(
-            in_leads=in_leads,
-            feat_dim=ecg_feat_dim,
-            num_labels=num_labels,   # ECG head logits can be used as aux if needed
-        )
+    all_probs = []
+    all_targets = []
 
-        # Demographic encoder
-        self.demo_encoder = DemoEncoder(
-            in_dim=5,
-            hidden_dim=32,
-            out_dim=demo_feat_dim,
-        )
+    with torch.no_grad():
+        pbar = tqdm(loader, desc="Val-ECG+Demo", leave=False)
 
-        fusion_dim = ecg_feat_dim + demo_feat_dim
+        for x_ecg, x_demo, y in pbar:
+            x_ecg = x_ecg.to(device)
+            x_demo = x_demo.to(device)
+            y = y.to(device)
 
-        self.classifier = nn.Sequential(
-            nn.Linear(fusion_dim, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(256, num_labels),
-        )
+            logits = model(x_ecg, x_demo)
+            loss = bce_loss_fn(logits, y)
 
-    def forward(self, ecg: torch.Tensor, demo: torch.Tensor):
-        """
-        ecg:  [B, 12, T]
-        demo: [B, 5]
+            total_loss += loss.item()
+            n_batches += 1
 
-        Returns:
-            logits: [B, num_labels]
-        """
-        # ECG encoder returns (logits, features) if return_features=True
-        ecg_logits, z_ecg = self.ecg_encoder(ecg, return_features=True)  # [B, ecg_feat_dim]
+            prob = torch.sigmoid(logits)
+            all_probs.append(prob.cpu().numpy())
+            all_targets.append(y.cpu().numpy())
 
-        # Demographic embedding
-        z_demo = self.demo_encoder(demo)                                 # [B, demo_feat_dim]
+    avg_loss = total_loss / max(1, n_batches)
 
-        # Fusion
-        z_fuse = torch.cat([z_ecg, z_demo], dim=-1)                      # [B, fusion_dim]
+    y_true = np.concatenate(all_targets, axis=0)
+    y_prob = np.concatenate(all_probs, axis=0)
 
-        logits = self.classifier(z_fuse)                                 # [B, num_labels]
-        return logits
+    metrics = compute_metrics(y_true, y_prob)
+    metrics["bce_loss"] = float(avg_loss)
+
+    return metrics

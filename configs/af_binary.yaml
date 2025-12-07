@@ -1,12 +1,12 @@
 seed: 42
 
 data:
-  base_dir: /Users/yuzi/Desktop/physionet.org/files/ptb-xl/1.0.3
+  base_dir: C:\Users\Administrator\Desktop\ptb-xl\1.0.3
   normalize: per_lead
 
 train:
   batch_size: 32
-  epochs: 4
+  epochs: 20
   lr: 1e-3
   weight_decay: 1e-4
   num_workers: 0
