@@ -1,7 +1,7 @@
 seed: 42
 
 data:
-  base_dir: C:\Users\Administrator\Desktop\ptb-xl\1.0.3
+  base_dir: /Users/yuzi/Desktop/physionet.org/files/ptb-xl/1.0.3
   normalize: per_lead
 
 train:
