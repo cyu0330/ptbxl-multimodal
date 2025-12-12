@@ -1,4 +1,7 @@
 # scripts/03_train_ecg_baseline.py
+#
+# Train a single-modal ECG baseline model on PTB-XL.
+# Saving logs, metrics CSV and the best checkpoint.
 
 import argparse
 import os
@@ -15,21 +18,17 @@ from src.datasets.ptbxl import PTBXLDataset
 from src.models.ecg_cnn import ECGCNN
 from src.training.loop import train_one_epoch, eval_one_epoch
 
-# 可选：让 PyTorch 针对当前 GPU 架构编译
 os.environ["TORCH_CUDA_ARCH_LIST"] = "native"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("[INFO] Device (script import):", device)
 
 
 def log_epoch_to_csv(csv_path, run_name, epoch, train_loss, val_metrics, ckpt_path, config_path):
-    """
-    Append one line of metrics into a CSV file.
-    If the file doesn't exist, write a header first.
-    """
+    """Append one line of metrics into a CSV. Create file with header if needed."""
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     file_exists = os.path.exists(csv_path)
 
-    with open(csv_path, mode="a", newline="") as f:
+    with open(csv_path, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow([
@@ -60,7 +59,7 @@ def log_epoch_to_csv(csv_path, run_name, epoch, train_loss, val_metrics, ckpt_pa
 
 
 def main(args):
-    # 1. 读取配置
+    # Load config
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
@@ -74,32 +73,21 @@ def main(args):
     classes = data_cfg.get("labels", ["MI", "STTC", "HYP", "CD", "NORM"])
     base_dir = data_cfg["base_dir"]
 
-    # === 输出目录结构 ===
-    # 希望最终为：
-    # outputs/
-    #   ecg_baseline/
-    #     ckpts/
-    #     logs/
-    root_out_dir = log_cfg.get("out_dir", "outputs")          # e.g. "outputs"
-    run_name = log_cfg.get("run_name", "ecg_baseline")        # 子目录名
+    # Output structure
+    root_out = log_cfg.get("out_dir", "outputs")
+    run_name = log_cfg.get("run_name", "ecg_baseline")
 
-    # 主目录：outputs/ecg_baseline
-    out_dir = os.path.join(root_out_dir, run_name)
-
-    # 日志目录：outputs/ecg_baseline/logs
+    out_dir = os.path.join(root_out, run_name)
     log_dir = os.path.join(out_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
 
-    # 指标 CSV：outputs/ecg_baseline/logs/metrics_ecg_baseline.csv
     metrics_csv = os.path.join(log_dir, "metrics_ecg_baseline.csv")
 
     print("[INFO] Using config:", args.config)
-    print("[INFO] Classes:", classes)
-    print("[INFO] Base dir:", base_dir)
-    print("[INFO] Out dir:", out_dir)
+    print("[INFO] Output dir:", out_dir)
     print("[INFO] Metrics CSV:", metrics_csv)
 
-    # 2. 数据集 & DataLoader
+    # Dataset & Loader
     train_ds = PTBXLDataset(
         base_dir,
         split="train",
@@ -112,6 +100,7 @@ def main(args):
         classes=classes,
         normalize=data_cfg.get("normalize", "per_lead"),
     )
+
     print("[Baseline] train size =", len(train_ds))
     print("[Baseline] val size   =", len(val_ds))
 
@@ -120,20 +109,18 @@ def main(args):
         batch_size=train_cfg["batch_size"],
         shuffle=True,
         num_workers=train_cfg.get("num_workers", 4),
-        pin_memory=False,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=train_cfg["batch_size"],
         shuffle=False,
         num_workers=train_cfg.get("num_workers", 4),
-        pin_memory=False,
     )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[INFO] Device (training): {device}")
+    print("[INFO] Device (training):", device)
 
-    # 3. 模型 & 优化器
+    # Model
     model = ECGCNN(
         in_leads=model_cfg.get("in_leads", 12),
         feat_dim=model_cfg.get("feat_dim", 256),
@@ -141,47 +128,44 @@ def main(args):
     ).to(device)
 
     lr = float(train_cfg.get("lr", 1e-3))
-    weight_decay = float(train_cfg.get("weight_decay", 0.0))
-    optimizer = AdamW(
-        model.parameters(),
-        lr=lr,
-        weight_decay=weight_decay,
-    )
+    wd = float(train_cfg.get("weight_decay", 0.0))
 
-    # 4. 训练循环
-    best_auprc = -1.0
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
+
+    # Training
+    best_auprc = -1
     ckpt_dir = os.path.join(out_dir, "ckpts")
     os.makedirs(ckpt_dir, exist_ok=True)
     ckpt_path = os.path.join(ckpt_dir, "ecg_baseline_best.pth")
-    print(f"[INFO] Checkpoints will be saved to: {ckpt_path}")
+
+    print("[INFO] Checkpoints ->", ckpt_path)
 
     for epoch in range(train_cfg["epochs"]):
         print(f"\nEpoch {epoch + 1}/{train_cfg['epochs']}")
+
         train_loss = train_one_epoch(model, train_loader, optimizer, device)
         print(f"Train BCE: {train_loss:.4f}")
 
         val_metrics = eval_one_epoch(model, val_loader, device)
         print("Val metrics:", val_metrics)
 
-        # 写入 CSV
+        # Save logs
         log_epoch_to_csv(
-            csv_path=metrics_csv,
-            run_name=run_name,
-            epoch=epoch + 1,
-            train_loss=train_loss,
-            val_metrics=val_metrics,
-            ckpt_path=ckpt_path,
-            config_path=args.config,
+            metrics_csv,
+            run_name,
+            epoch + 1,
+            train_loss,
+            val_metrics,
+            ckpt_path,
+            args.config,
         )
 
+        # Save best checkpoint
         auprc = float(val_metrics.get("auprc_macro", -1))
         if auprc > best_auprc:
             best_auprc = auprc
-            torch.save(
-                {"model_state": model.state_dict(), "classes": classes},
-                ckpt_path,
-            )
-            print(f"⭐ New best AUPRC {best_auprc:.4f}, saved to {ckpt_path}")
+            torch.save({"model_state": model.state_dict(), "classes": classes}, ckpt_path)
+            print(f"★ New best AUPRC: {best_auprc:.4f}")
 
 
 if __name__ == "__main__":
@@ -190,7 +174,6 @@ if __name__ == "__main__":
         "--config",
         type=str,
         default="configs/ecg_baseline.yaml",
-        help="Path to YAML config file.",
     )
     args = parser.parse_args()
     main(args)

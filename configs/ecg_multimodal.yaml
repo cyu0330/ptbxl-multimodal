@@ -5,23 +5,30 @@ data:
   fs: 500
   leads: 12
   normalize: per_lead
-  min_occ: 50 
+  min_occ: 50
   labels: ["MI", "STTC", "HYP", "CD", "NORM"]
-  split: "strat_fold_9" 
+  split: "strat_fold_9"
 
 train:
   batch_size: 64
   epochs: 30
   optimizer: "adamw"
-  lr: 1.5e-3
+  lr: 1.0e-4
   weight_decay: 1e-4
   amp: true
   early_stop_patience: 8
+  num_workers: 4
 
 metrics:
   main: "auprc_macro"
   thresholds: "search_per_class"
 
+model:
+  ecg_multimodal:
+    in_leads: 12
+    ecg_feat_dim: 256
+    demo_hidden_dim: 64
+
 log:
-  out_dir: "outputs"
+  out_dir: "outputs/ecg_multimodal"
   tb: true

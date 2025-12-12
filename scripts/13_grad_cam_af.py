@@ -1,7 +1,6 @@
 # scripts/13_grad_cam_af.py
 #
-# Grad-CAM for AF binary model
-# 输出：红色 ECG 热力图
+# Grad-CAM for AF binary classifier (ECGCNN)
 
 import os
 import argparse
@@ -18,13 +17,10 @@ os.environ["TORCH_CUDA_ARCH_LIST"] = "native"
 
 
 # --------------------------------------------------------
-# 1. Grad-CAM for AF model
+# Grad-CAM implementation for AF model
 # --------------------------------------------------------
 class GradCAM1D_AF:
-    """
-    target_layer 必须是最后一层卷积层，例如：
-    model.backbone[-1].net[0]
-    """
+    """Grad-CAM applied to 1D ECG CNN backbone."""
 
     def __init__(self, model, target_layer):
         self.model = model
@@ -33,10 +29,11 @@ class GradCAM1D_AF:
         self.activations = None
         self.gradients = None
         self.hooks = []
-
         self._register_hooks()
 
     def _register_hooks(self):
+        """Register forward and backward hooks."""
+
         def fwd_hook(module, inp, out):
             self.activations = out.detach()
 
@@ -52,26 +49,20 @@ class GradCAM1D_AF:
         self.hooks = []
 
     def generate_cam(self, x, signal_length):
-        """
-        x: [1, 12, T]
-        signal_length: T
-        """
+        """Compute Grad-CAM for a single AF logit."""
         self.model.zero_grad()
 
-        logits = self.model(x)      # [1, 1]
-        score = logits[:, 0].sum()  # AF 概率的 logit
+        logits = self.model(x)          # [1, 1]
+        score = logits[:, 0].sum()
         score.backward()
 
-        acts = self.activations     # [1, C, T']
-        grads = self.gradients      # [1, C, T']
+        acts = self.activations         # [1, C, T']
+        grads = self.gradients          # [1, C, T']
 
-        # GAP → 通道权重
         weights = grads.mean(dim=-1, keepdim=True)   # [1, C, 1]
-
         cam = (weights * acts).sum(dim=1)            # [1, T']
         cam = F.relu(cam)
 
-        # 插值回 T（原始长度）
         cam = F.interpolate(
             cam.unsqueeze(1),
             size=signal_length,
@@ -79,7 +70,6 @@ class GradCAM1D_AF:
             align_corners=False
         ).squeeze(1)
 
-        # 归一化
         cam = cam - cam.min()
         cam = cam / (cam.max() + 1e-9)
 
@@ -87,7 +77,7 @@ class GradCAM1D_AF:
 
 
 # --------------------------------------------------------
-# 2. 画图：ECG + 红色 GradCAM
+# Plot ECG trace with background CAM heatmap
 # --------------------------------------------------------
 def plot_ecg_cam(ecg, cam, lead_idx, title, save_path):
     if isinstance(ecg, torch.Tensor):
@@ -131,7 +121,7 @@ def plot_ecg_cam(ecg, cam, lead_idx, title, save_path):
 
 
 # --------------------------------------------------------
-# 3. 加载 AF 模型
+# Load AF binary model
 # --------------------------------------------------------
 def load_af_model(ckpt_path, device):
     model = ECGCNN(in_leads=12, feat_dim=256, num_labels=1)
@@ -144,7 +134,7 @@ def load_af_model(ckpt_path, device):
 
 
 # --------------------------------------------------------
-# 4. 主流程
+# Main
 # --------------------------------------------------------
 def main(args):
     set_seed(42)
@@ -152,7 +142,6 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("[INFO] Device:", device)
 
-    # 数据集
     test_ds = PTBXLAFDataset(
         base_dir=args.base_dir,
         split="test",
@@ -160,25 +149,18 @@ def main(args):
     )
     print("[INFO] AF test size:", len(test_ds))
 
-    # 模型
     model = load_af_model(args.ckpt, device)
-
-    # Grad-CAM target layer（最后一层卷积）
     target_layer = model.backbone[-1].net[0]
-
     gradcam = GradCAM1D_AF(model, target_layer)
 
-    # 取样本
-    x, y = test_ds[args.index]  # [12, T], [1]
+    x, y = test_ds[args.index]
     T = x.shape[-1]
-
     x_t = x.unsqueeze(0).to(device)
 
     print(f"[INFO] Running AF Grad-CAM on sample {args.index} (y={y.item()})")
 
     cam = gradcam.generate_cam(x_t, signal_length=T)
 
-    # 保存 CAM 数值
     os.makedirs("outputs/gradcam_af", exist_ok=True)
 
     npy_path = os.path.join(
@@ -188,7 +170,6 @@ def main(args):
     np.save(npy_path, cam.numpy())
     print("[SAVE] CAM saved to:", npy_path)
 
-    # 保存图像
     fig_path = os.path.join(
         "outputs/gradcam_af",
         f"sample_{args.index}_AF_plot.png"

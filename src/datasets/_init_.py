@@ -10,4 +10,4 @@ is kept in ptbxl.py to maintain a clean and modular project structure.
 """
 
 from .ptbxl import PTBXLDataset
-from .ptbxl_ecg_demo import PTBXLECGDemoDataset
+from .ptbxl_ecg_multimodal import PTBXLECGMultimodalDataset

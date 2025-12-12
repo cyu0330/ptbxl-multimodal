@@ -17,9 +17,9 @@ def main():
         default="outputs/ecg_baseline/preds/ecg_baseline_test_preds.csv",
     )
     parser.add_argument(
-        "--demo_csv",
+        "--multimodal_csv",
         type=str,
-        default="outputs/ecg_demo/preds/ecg_demo_test_preds.csv",
+        default="outputs/ecg_multimodal/preds/ecg_multimodal_test_preds.csv",
     )
     parser.add_argument(
         "--af_csv",
@@ -37,27 +37,26 @@ def main():
     print("[INFO] Loading baseline:", args.baseline_csv)
     df_base = pd.read_csv(args.baseline_csv)
 
-    print("[INFO] Loading demo:", args.demo_csv)
-    df_demo = pd.read_csv(args.demo_csv)
+    print("[INFO] Loading multimodal:", args.multimodal_csv)
+    df_mm = pd.read_csv(args.multimodal_csv)
 
     print("[INFO] Loading AF:", args.af_csv)
     df_af = pd.read_csv(args.af_csv)
 
-    # 检查行数是否一致
+    # Check row count
     n = len(df_base)
-    if len(df_demo) != n or len(df_af) != n:
+    if len(df_mm) != n or len(df_af) != n:
         raise ValueError(
-            f"Row count mismatch: baseline={len(df_base)}, demo={len(df_demo)}, AF={len(df_af)}"
+            f"Row count mismatch: baseline={len(df_base)}, multimodal={len(df_mm)}, AF={len(df_af)}"
         )
 
-    # 删除 demo 中的 y_true_* 列（保留 baseline 的 ground truth）
-    demo_cols = [c for c in df_demo.columns if not c.startswith("y_true_")]
-    df_demo = df_demo[demo_cols]
+    # Remove duplicated ground-truth columns (keep baseline GT only)
+    mm_cols = [c for c in df_mm.columns if not c.startswith("y_true_")]
+    df_mm = df_mm[mm_cols]
 
-    # 合并三组预测
-    df_merged = pd.concat([df_base, df_demo, df_af], axis=1)
+    # Merge results
+    df_merged = pd.concat([df_base, df_mm, df_af], axis=1)
 
-    # 保存
     os.makedirs(os.path.dirname(args.out_csv), exist_ok=True)
     df_merged.to_csv(args.out_csv, index=False)
 

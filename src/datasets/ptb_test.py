@@ -4,50 +4,77 @@ import os
 from torch.utils.data import DataLoader
 
 from src.datasets.ptbxl import PTBXLDataset
-
-from src.datasets.ptbxl_ecg_demo import PTBXLECGDemoDataset
+from src.datasets.ptbxl_ecg_multimodal import PTBXLECGMultimodalDataset
 from src.datasets.ptbxl_af import PTBXLAFDataset
 
 
 def make_baseline_test_loader(config):
     """
-    Test loader for 03 ECG baseline on strat_fold=10.
+    Create test loader for the ECG baseline model.
+    Assumes test split = 'test' (strat_fold = 10 in PTB-XL).
     """
-    # 这里我们约定：val fold 仍然来自 config["data"]["split"]（比如 strat_fold_9）
-    # 而 test fold = 10，在 PTBXLDataSet 内部处理，或者在 config 里约定好
-    ds = PTBXLDataset(split="test", config=config)
+    data_cfg = config["data"]
+    train_cfg = config["train"]
+
+    ds = PTBXLDataset(
+        base_dir=data_cfg["base_dir"],
+        split="test",
+        classes=data_cfg["labels"],
+        normalize=data_cfg.get("normalize", "per_lead"),
+    )
+
     loader = DataLoader(
         ds,
-        batch_size=config["train"]["batch_size"],
+        batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=config["train"]["num_workers"],
+        num_workers=train_cfg.get("num_workers", 4),
+        pin_memory=False,
     )
     return loader
 
 
-def make_demo_test_loader(config):
+def make_multimodal_test_loader(config):
     """
-    Test loader for 04 ECG+Demo multimodal model on strat_fold=10.
+    Create test loader for the ECG + demographics multimodal model.
     """
-    ds = PTBXLECGDemoDataset(split="test", config=config)
+    data_cfg = config["data"]
+    train_cfg = config["train"]
+
+    ds = PTBXLECGMultimodalDataset(
+        base_dir=data_cfg["base_dir"],
+        split="test",
+        classes=data_cfg["labels"],
+        normalize=data_cfg.get("normalize", "per_lead"),
+    )
+
     loader = DataLoader(
         ds,
-        batch_size=config["train"]["batch_size"],
+        batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=config["train"]["num_workers"],
+        num_workers=train_cfg.get("num_workers", 4),
+        pin_memory=False,
     )
     return loader
 
 
 def make_af_test_loader(config):
     """
-    Test loader for 05 AF binary model on strat_fold=10.
+    Create test loader for the AF binary classifier.
     """
-    ds = PTBXLAFDataset(split="test", config=config)
+    data_cfg = config["data"]
+    train_cfg = config["train"]
+
+    ds = PTBXLAFDataset(
+        base_dir=data_cfg["base_dir"],
+        split="test",
+        normalize=data_cfg.get("normalize", "per_lead"),
+    )
+
     loader = DataLoader(
         ds,
-        batch_size=config["train"]["batch_size"],
+        batch_size=train_cfg["batch_size"],
         shuffle=False,
-        num_workers=config["train"]["num_workers"],
+        num_workers=train_cfg.get("num_workers", 4),
+        pin_memory=False,
     )
     return loader

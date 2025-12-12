@@ -1,3 +1,5 @@
+# src/training/loop.py
+
 from typing import Dict
 
 import torch
@@ -10,6 +12,10 @@ from src.training.metrics import compute_metrics
 
 
 def train_one_epoch(model, loader: DataLoader, optimizer, device) -> float:
+    """
+    Standard training loop for single-input ECG models.
+    Outputs only a BCE loss.
+    """
     model.train()
     total_loss = 0.0
 
@@ -20,14 +26,8 @@ def train_one_epoch(model, loader: DataLoader, optimizer, device) -> float:
         optimizer.zero_grad()
 
         out = model(x)
-        # 兼容：
-        # - logits
-        # - (logits, features)
-        # - (logits, features, ...)
-        if isinstance(out, tuple):
-            logits = out[0]
-        else:
-            logits = out
+        # Support both logits and (logits, features, ...)
+        logits = out[0] if isinstance(out, tuple) else out
 
         loss = F.binary_cross_entropy_with_logits(logits, y)
         loss.backward()
@@ -39,9 +39,14 @@ def train_one_epoch(model, loader: DataLoader, optimizer, device) -> float:
 
 
 def eval_one_epoch(model, loader: DataLoader, device) -> Dict[str, float]:
+    """
+    Standard evaluation loop for ECG baseline models.
+    Returns BCE + threshold-based metrics.
+    """
     model.eval()
-    ys = []
-    ps = []
+
+    all_targets = []
+    all_probs = []
     total_loss = 0.0
 
     with torch.no_grad():
@@ -50,22 +55,19 @@ def eval_one_epoch(model, loader: DataLoader, device) -> Dict[str, float]:
             y = y.to(device)
 
             out = model(x)
-            if isinstance(out, tuple):
-                logits = out[0]
-            else:
-                logits = out
+            logits = out[0] if isinstance(out, tuple) else out
 
             loss = F.binary_cross_entropy_with_logits(logits, y)
-
-            prob = torch.sigmoid(logits)
-            ys.append(y.cpu().numpy())
-            ps.append(prob.cpu().numpy())
             total_loss += loss.item() * x.size(0)
 
-    y_true = np.concatenate(ys, axis=0)
-    y_prob = np.concatenate(ps, axis=0)
+            prob = torch.sigmoid(logits)
+            all_targets.append(y.cpu().numpy())
+            all_probs.append(prob.cpu().numpy())
 
-    # 你原来的 compute_metrics 调用保持不变
+    y_true = np.concatenate(all_targets, axis=0)
+    y_prob = np.concatenate(all_probs, axis=0)
+
     metrics = compute_metrics(y_true, y_prob, threshold=0.5)
     metrics["bce_loss"] = total_loss / len(loader.dataset)
+
     return metrics

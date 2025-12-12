@@ -1,0 +1,5 @@
+Sample index: 25
+Class: MI
+Class idx: 0
+ECG shape: (12, 5000)
+CAM shape: torch.Size([5000])

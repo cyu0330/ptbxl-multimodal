@@ -1,4 +1,4 @@
-# src/datasets/ptbxl_ecg_demo.py
+# src/datasets/ptbxl_ecg_multimodal.py
 
 import os
 from typing import Tuple, List
@@ -9,12 +9,12 @@ from torch.utils.data import Dataset
 import wfdb
 
 from src.utils.label_maps import load_metadata, build_label_matrix
-from src.datasets.ptbxl import _is_valid_ecg   # reuse baseline ECG validity check
+from src.datasets.ptbxl import _is_valid_ecg
 
 
 def _load_ecg(record_path: str) -> np.ndarray:
     """
-    Load ECG signal from a PTB-XL record and return [12, T].
+    Load ECG signal from one PTB-XL record and return [12, T].
     """
     try:
         sig, meta = wfdb.rdsamp(record_path)  # sig: [T, n_leads]
@@ -34,16 +34,15 @@ def _load_ecg(record_path: str) -> np.ndarray:
             f"Unexpected number of leads for {record_path}: {n_leads}, expected 12"
         )
 
-    # [T, 12] -> [12, T]
-    return sig.T
+    return sig.T  # [T, 12] -> [12, T]
 
 
-class PTBXLECGDemoDataset(Dataset):
+class PTBXLECGMultimodalDataset(Dataset):
     """
-    PTB-XL dataset returning:
+    PTB-XL dataset that returns:
       - ECG waveform [12, T]
       - demographic features [age_norm, sex_id, height_norm, weight_norm, pacemaker]
-      - multi-label targets for diagnostic superclasses
+      - multi-label diagnostic targets
     """
     def __init__(
         self,
@@ -65,12 +64,12 @@ class PTBXLECGDemoDataset(Dataset):
             df_split = df[df["strat_fold"] == 10].reset_index(drop=True)
         elif split == "val":
             df_split = df[df["strat_fold"] == 9].reset_index(drop=True)
-        else:  # "train"
+        else:  # train
             df_split = df[df["strat_fold"] <= 8].reset_index(drop=True)
 
         num_before = len(df_split)
 
-        # 3) Keep records with valid ECG files (same as PTBXLDataset)
+        # 3) Keep records with valid ECG files
         mask_valid = df_split["filename_hr"].apply(
             lambda rel: _is_valid_ecg(base_dir, rel)
         )
@@ -83,7 +82,7 @@ class PTBXLECGDemoDataset(Dataset):
         num_after_demo = len(df_split)
 
         print(
-            f"[PTBXLECGDemoDataset] split={split} | "
+            f"[PTBXLECGMultimodalDataset] split={split} | "
             f"total={num_before} | valid_ecg={num_after_valid} | "
             f"after_drop_missing_age_sex={num_after_demo} | "
             f"dropped={num_before - num_after_demo}"
@@ -99,7 +98,6 @@ class PTBXLECGDemoDataset(Dataset):
 
     def _normalize_ecg(self, x: np.ndarray) -> np.ndarray:
         if self.normalize == "per_lead":
-            # x: [12, T]
             mean = x.mean(axis=1, keepdims=True)
             std = x.std(axis=1, keepdims=True) + 1e-6
             return (x - mean) / std
@@ -107,7 +105,7 @@ class PTBXLECGDemoDataset(Dataset):
 
     def _build_demo_vector(self, row) -> np.ndarray:
         """
-        demo = [age_norm, sex_id, height_norm, weight_norm, pacemaker]
+        Return demographic vector [age_norm, sex_id, height_norm, weight_norm, pacemaker].
         """
         # age
         age = row.get("age", np.nan)
@@ -117,7 +115,7 @@ class PTBXLECGDemoDataset(Dataset):
             age = 0.0
         if (not np.isfinite(age)) or (age < 0):
             age = 0.0
-        if age >= 300:  # anonymized >89
+        if age >= 300:
             age = 90.0
         age_norm = age / 100.0
 
@@ -168,23 +166,23 @@ class PTBXLECGDemoDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Returns:
-          x_ecg:  [12, T] float32 ECG waveform
-          x_demo: [5]     float32 demographic vector
-          y:      [num_labels] float32 multi-hot label vector
+          x_ecg:  [12, T]
+          x_demo: [5]
+          y:      [num_labels]
         """
         row = self.df.iloc[idx]
 
-        # ECG
+        # ECG waveform
         rel_path = row["filename_hr"]
         record_path = os.path.join(self.base_dir, rel_path)
-        x_ecg = _load_ecg(record_path)      # [12, T]
+        x_ecg = _load_ecg(record_path)
         x_ecg = self._normalize_ecg(x_ecg)
 
-        # Demographic vector
-        x_demo = self._build_demo_vector(row)   # [5]
+        # Demographics
+        x_demo = self._build_demo_vector(row)
 
         # Labels
-        y = self.y[idx]                         # [num_labels]
+        y = self.y[idx]
 
         x_ecg_t = torch.from_numpy(x_ecg).float()
         x_demo_t = torch.from_numpy(x_demo).float()

@@ -1,0 +1,5 @@
+Sample index: 10
+Class: STTC
+Class idx: 1
+ECG shape: (12, 5000)
+CAM shape: torch.Size([5000])

@@ -7,19 +7,18 @@ from tqdm import tqdm
 
 from src.training.metrics import compute_metrics
 
-
 bce_loss_fn = BCEWithLogitsLoss()
 
 
 def train_one_epoch_demo(model, loader, optimizer, device):
     """
-    Clean training loop for ECG + Demo model.
-    Only one loss:
-        loss = BCE(logits, y)
+    Training loop for the ECG + demographic model.
+    Computes a single BCE loss on all output labels.
     """
     model.train()
+
     total_loss = 0.0
-    n_batches = 0
+    num_batches = 0
 
     pbar = tqdm(loader, desc="Train-ECG+Demo", leave=False)
 
@@ -30,29 +29,29 @@ def train_one_epoch_demo(model, loader, optimizer, device):
 
         optimizer.zero_grad()
 
-        logits = model(x_ecg, x_demo)      # forward
-        loss = bce_loss_fn(logits, y)      # single loss
+        logits = model(x_ecg, x_demo)
+        loss = bce_loss_fn(logits, y)
 
         loss.backward()
         optimizer.step()
 
         total_loss += loss.item()
-        n_batches += 1
+        num_batches += 1
 
         pbar.set_postfix(loss=loss.item())
 
-    return total_loss / max(1, n_batches)
-
-
+    return total_loss / max(1, num_batches)
 
 
 def eval_one_epoch_demo(model, loader, device):
     """
-    Clean evaluation for ECG + Demo.
+    Evaluation loop for the ECG + demographic model.
+    Returns BCE loss and per-label metrics.
     """
     model.eval()
+
     total_loss = 0.0
-    n_batches = 0
+    num_batches = 0
 
     all_probs = []
     all_targets = []
@@ -69,13 +68,13 @@ def eval_one_epoch_demo(model, loader, device):
             loss = bce_loss_fn(logits, y)
 
             total_loss += loss.item()
-            n_batches += 1
+            num_batches += 1
 
             prob = torch.sigmoid(logits)
             all_probs.append(prob.cpu().numpy())
             all_targets.append(y.cpu().numpy())
 
-    avg_loss = total_loss / max(1, n_batches)
+    avg_loss = total_loss / max(1, num_batches)
 
     y_true = np.concatenate(all_targets, axis=0)
     y_prob = np.concatenate(all_probs, axis=0)

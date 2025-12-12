@@ -1,4 +1,7 @@
 # scripts/01_download_missing_records.py
+#
+# Utility script for locating missing PTB-XL waveform files (.hea / .dat)
+# and downloading them from PhysioNet if needed.
 
 import argparse
 import os
@@ -12,11 +15,11 @@ from time import sleep
 
 def find_missing_records(base_dir: str) -> List[Tuple[str, str, str]]:
     """
-    Scan ptbxl_database.csv and find records whose .hea or .dat file is missing.
+    Check ptbxl_database.csv and identify entries whose .hea or .dat file
+    is not present locally.
 
     Returns:
-        List of tuples: (rel_record_path, hea_path, dat_path)
-        where rel_record_path is like 'records500/11000/11662_hr'
+        A list of tuples (relative_record_path, local_hea_path, local_dat_path)
     """
     db_path = os.path.join(base_dir, "ptbxl_database.csv")
     if not os.path.exists(db_path):
@@ -25,12 +28,12 @@ def find_missing_records(base_dir: str) -> List[Tuple[str, str, str]]:
     df = pd.read_csv(db_path)
 
     if "filename_hr" not in df.columns:
-        raise KeyError("Column 'filename_hr' not found in ptbxl_database.csv")
+        raise KeyError("Column 'filename_hr' missing in ptbxl_database.csv")
 
     missing = []
 
     for _, row in df.iterrows():
-        rel_path = row["filename_hr"]  # e.g. "records500/11000/11662_hr"
+        rel_path = row["filename_hr"]
         rec_path = os.path.join(base_dir, rel_path)
 
         hea_path = rec_path + ".hea"
@@ -44,19 +47,20 @@ def find_missing_records(base_dir: str) -> List[Tuple[str, str, str]]:
 
 def download_file(url: str, dst_path: str, session: requests.Session, retries: int = 3) -> bool:
     """
-    Download a single file from url to dst_path.
+    Download a file from a given URL into dst_path.
 
     Returns:
-        True if success, False otherwise.
+        True if successful, False otherwise.
     """
     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
 
     for attempt in range(1, retries + 1):
         try:
-            print(f"  -> Downloading {url} -> {dst_path}")
+            print(f"  -> Downloading {url}")
             resp = session.get(url, stream=True, timeout=30)
+
             if resp.status_code != 200:
-                print(f"     HTTP {resp.status_code} on attempt {attempt}")
+                print(f"     HTTP {resp.status_code} (attempt {attempt})")
                 sleep(1.0)
                 continue
 
@@ -64,7 +68,9 @@ def download_file(url: str, dst_path: str, session: requests.Session, retries: i
                 for chunk in resp.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
+
             return True
+
         except Exception as e:
             print(f"     Error on attempt {attempt}: {e}")
             sleep(1.0)
@@ -79,61 +85,51 @@ def download_missing_records(
     max_missing: int = None,
 ) -> None:
     """
-    Find missing PTB-XL records (.hea/.dat) and download them from PhysioNet.
+    Detect missing waveform files and download them from PhysioNet.
 
     Args:
-        base_dir: local PTB-XL directory (contains ptbxl_database.csv, records500/, etc.)
-        base_url: remote PTB-XL root url
-        max_missing: if given, only process at most this many missing records
+        base_dir: Local PTB-XL directory.
+        base_url: Remote root path of PTB-XL.
+        max_missing: Limit number of records for testing.
     """
-    print(f"Base dir: {base_dir}")
-    print(f"Remote base url: {base_url}")
+    print(f"Local PTB-XL directory: {base_dir}")
 
     missing = find_missing_records(base_dir)
-    total_missing = len(missing)
-    print(f"Found {total_missing} records with missing .hea/.dat")
+    total = len(missing)
+    print(f"Missing records: {total}")
 
-    if total_missing == 0:
-        print("Nothing to download. All records seem complete.")
+    if total == 0:
+        print("All waveform files are present.")
         return
 
     if max_missing is not None:
         missing = missing[:max_missing]
-        print(f"Will download only the first {len(missing)} missing records (max_missing={max_missing})")
+        print(f"Processing only first {len(missing)} records (max_missing={max_missing})")
 
     session = requests.Session()
 
     completed = 0
     for idx, (rel_path, hea_path, dat_path) in enumerate(missing, start=1):
-        print(f"\n[{idx}/{len(missing)}] Record: {rel_path}")
+        print(f"\n[{idx}/{len(missing)}] {rel_path}")
 
-        # Construct remote URLs
-        # rel_path example: 'records500/11000/11662_hr'
-        hea_rel = rel_path + ".hea"
-        dat_rel = rel_path + ".dat"
-
-        hea_url = urljoin(base_url, hea_rel)
-        dat_url = urljoin(base_url, dat_rel)
+        hea_url = urljoin(base_url, rel_path + ".hea")
+        dat_url = urljoin(base_url, rel_path + ".dat")
 
         ok_he = True
         ok_da = True
 
         if not os.path.exists(hea_path):
             ok_he = download_file(hea_url, hea_path, session)
-        else:
-            print(f"  hea exists: {hea_path}")
 
         if not os.path.exists(dat_path):
             ok_da = download_file(dat_url, dat_path, session)
-        else:
-            print(f"  dat exists: {dat_path}")
 
         if ok_he and ok_da:
             completed += 1
         else:
-            print("  !! This record is still incomplete after download attempts.")
+            print("  Incomplete after download attempts.")
 
-    print(f"\nDone. Successfully completed {completed} / {len(missing)} missing records.")
+    print(f"\nCompleted {completed} / {len(missing)} records.")
 
 
 def main():
@@ -142,22 +138,22 @@ def main():
         "--base_dir",
         type=str,
         required=True,
-        help="Local PTB-XL directory (contains ptbxl_database.csv, records500/, etc.)",
+        help="Local PTB-XL directory containing ptbxl_database.csv.",
     )
     parser.add_argument(
         "--base_url",
         type=str,
         default="https://physionet.org/files/ptb-xl/1.0.3/",
-        help="Remote PTB-XL base URL",
+        help="Remote base URL of PTB-XL dataset.",
     )
     parser.add_argument(
         "--max_missing",
         type=int,
         default=None,
-        help="Maximum number of missing records to download (for testing).",
+        help="Limit number of records to download.",
     )
-    args = parser.parse_args()
 
+    args = parser.parse_args()
     download_missing_records(
         base_dir=args.base_dir,
         base_url=args.base_url,

@@ -16,24 +16,23 @@ def main():
 
     labels = ["MI", "STTC", "HYP", "CD", "NORM"]
 
-    # --------- Baseline per-class ROC (Figure B1) ----------
-    fig_b1_path = out_dir / "baseline_b1_per_class_roc.png"
-    plot_baseline_per_class_roc(df, labels, fig_b1_path)
+    # ROC curves for each baseline class
+    plot_baseline_per_class_roc(df, labels, out_dir / "baseline_per_class_roc.png")
 
-    # --------- Baseline per-class PR (Figure B2) ----------
-    fig_b2_path = out_dir / "baseline_b2_per_class_pr.png"
-    plot_baseline_per_class_pr(df, labels, fig_b2_path)
+    # Precision–Recall curves for each baseline class
+    plot_baseline_per_class_pr(df, labels, out_dir / "baseline_per_class_pr.png")
 
-    # --------- Baseline MI probability distribution (Figure B3) ----------
-    fig_b3_path = out_dir / "baseline_b3_mi_distribution.png"
-    plot_baseline_mi_distribution(df, fig_b3_path)
+    # MI probability distribution (baseline only)
+    plot_baseline_mi_distribution(df, out_dir / "baseline_mi_distribution.png")
 
-    print("[INFO] Baseline-only figures saved to:", out_dir.resolve())
-    print("[INFO] You can treat these as Figure B1, B2, B3 in the thesis.")
+    print("[INFO] All baseline figures saved:", out_dir.resolve())
 
 
+# ----------------------------------------------------------------------
+# ROC per class
+# ----------------------------------------------------------------------
 def plot_baseline_per_class_roc(df, labels, out_path: Path):
-    """Baseline model: per-class ROC curves in a single figure."""
+    """Plot ROC curves for the baseline model (per diagnostic class)."""
     plt.style.use("default")
     fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -41,31 +40,35 @@ def plot_baseline_per_class_roc(df, labels, out_path: Path):
         y_true = df[f"y_true_{lb}"].values.astype(float)
         y_prob = df[f"y_prob_{lb}"].values.astype(float)
 
-        # skip if no positive/negative variation
+        # skip classes without both positive and negative samples
         if np.unique(y_true).size < 2:
-            print(f"[WARN] ROC skipped for {lb} (y_true has single value).")
+            print(f"[WARN] Skipped ROC for {lb} (y_true has single value).")
             continue
 
         fpr, tpr, _ = roc_curve(y_true, y_prob)
         auroc = roc_auc_score(y_true, y_prob)
-        ax.plot(fpr, tpr, label=f"{lb} (AUROC={auroc:.3f})", linewidth=2)
+
+        ax.plot(fpr, tpr, linewidth=2, label=f"{lb} (AUROC={auroc:.3f})")
 
     ax.plot([0, 1], [0, 1], linestyle="--", color="#888888", linewidth=1)
-    ax.set_xlim(0.0, 1.0)
-    ax.set_ylim(0.0, 1.0)
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("Baseline per-class ROC curves")
-    ax.legend(loc="lower right", fontsize=8)
+    ax.set_title("Baseline model — ROC curves (per class)")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
+    ax.legend(loc="lower right", fontsize=8)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=300)
     plt.close(fig)
 
 
+# ----------------------------------------------------------------------
+# PR per class
+# ----------------------------------------------------------------------
 def plot_baseline_per_class_pr(df, labels, out_path: Path):
-    """Baseline model: per-class Precision–Recall curves."""
+    """Plot Precision–Recall curves for the baseline model (per class)."""
     plt.style.use("default")
     fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -74,42 +77,57 @@ def plot_baseline_per_class_pr(df, labels, out_path: Path):
         y_prob = df[f"y_prob_{lb}"].values.astype(float)
 
         if np.unique(y_true).size < 2:
-            print(f"[WARN] PR skipped for {lb} (y_true has single value).")
+            print(f"[WARN] Skipped PR for {lb} (y_true has single value).")
             continue
 
         precision, recall, _ = precision_recall_curve(y_true, y_prob)
         auprc = average_precision_score(y_true, y_prob)
-        ax.plot(recall, precision, label=f"{lb} (AUPRC={auprc:.3f})", linewidth=2)
 
-    ax.set_xlim(0.0, 1.0)
-    ax.set_ylim(0.0, 1.0)
+        ax.plot(recall, precision, linewidth=2, label=f"{lb} (AUPRC={auprc:.3f})")
+
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")
-    ax.set_title("Baseline per-class Precision–Recall curves")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.set_title("Baseline model — Precision–Recall curves (per class)")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
     ax.grid(alpha=0.3)
+    ax.legend(loc="upper right", fontsize=8)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=300)
     plt.close(fig)
 
 
+# ----------------------------------------------------------------------
+# MI probability distribution (baseline)
+# ----------------------------------------------------------------------
 def plot_baseline_mi_distribution(df, out_path: Path):
-    """Baseline-only MI prediction probability distribution."""
+    """Plot the distribution of MI prediction probabilities for the baseline model."""
     plt.style.use("default")
 
     y_true = df["y_true_MI"].values.astype(float)
     y_prob = df["y_prob_MI"].values.astype(float)
 
     plt.figure(figsize=(8, 5))
-    sns.kdeplot(y_prob[y_true == 1], label="MI=1 (positive)", color="#4C72B0", shade=True)
-    sns.kdeplot(y_prob[y_true == 0], label="MI=0 (negative)", color="#4C72B0", linestyle="--")
 
-    plt.title("Baseline MI prediction probability distribution")
+    sns.kdeplot(
+        y_prob[y_true == 1],
+        label="MI positive",
+        color="#4C72B0",
+        shade=True
+    )
+    sns.kdeplot(
+        y_prob[y_true == 0],
+        label="MI negative",
+        color="#4C72B0",
+        linestyle="--"
+    )
+
     plt.xlabel("Predicted probability")
     plt.ylabel("Density")
-    plt.legend()
+    plt.title("Baseline model — MI probability distribution")
     plt.grid(alpha=0.3)
+    plt.legend()
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
