@@ -25,7 +25,6 @@ def log_epoch_to_csv(
     ckpt_path,
     config_path,
 ):
-    """Append one epoch result to a CSV file, create header if needed."""
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     file_exists = os.path.exists(csv_path)
 
@@ -82,11 +81,14 @@ def main(args):
     os.makedirs(out_dir, exist_ok=True)
 
     base_run_name = log_cfg.get("run_name", "ecg_multimodal")
-    time_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{base_run_name}_{time_tag}"
+
+    # NOTE: keep run_name stable (no timestamp)
+    run_name = base_run_name
 
     log_dir = os.path.join(out_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
+
+    # NOTE: overwrite metrics file for this run
     metrics_csv = os.path.join(log_dir, f"metrics_{run_name}.csv")
 
     print("[INFO] Using config:", args.config)
@@ -164,6 +166,8 @@ def main(args):
 
     ckpt_dir = os.path.join(out_dir, "ckpts")
     os.makedirs(ckpt_dir, exist_ok=True)
+
+    # NOTE: fixed checkpoint name
     ckpt_path = os.path.join(ckpt_dir, f"{run_name}_best.pth")
 
     print(f"[INFO] Best checkpoint will be saved to: {ckpt_path}")

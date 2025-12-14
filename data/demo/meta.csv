@@ -1,0 +1,15 @@
+file,modality,index_in_split,chosen_for,y_true,y_sum,ecg_shape,demo_shape
+single/single_sample_00.npz,single,245,pos_MI,MI=1;STTC=1;HYP=0;CD=0;NORM=0,2,"(12, 5000)",
+single/single_sample_01.npz,single,1440,pos_STTC,MI=0;STTC=1;HYP=1;CD=1;NORM=0,3,"(12, 5000)",
+single/single_sample_02.npz,single,1909,pos_HYP,MI=0;STTC=1;HYP=1;CD=1;NORM=0,3,"(12, 5000)",
+single/single_sample_03.npz,single,75,pos_CD,MI=0;STTC=1;HYP=0;CD=1;NORM=0,2,"(12, 5000)",
+single/single_sample_04.npz,single,789,pos_NORM,MI=0;STTC=0;HYP=0;CD=0;NORM=1,1,"(12, 5000)",
+single/single_sample_05.npz,single,334,all_zero,MI=0;STTC=0;HYP=0;CD=0;NORM=0,0,"(12, 5000)",
+single/single_sample_06.npz,single,1259,all_zero,MI=0;STTC=0;HYP=0;CD=0;NORM=0,0,"(12, 5000)",
+multimodal/mm_sample_00.npz,multimodal,245,pos_MI,MI=1;STTC=1;HYP=0;CD=0;NORM=0,2,"(12, 5000)","(5,)"
+multimodal/mm_sample_01.npz,multimodal,1440,pos_STTC,MI=0;STTC=1;HYP=1;CD=1;NORM=0,3,"(12, 5000)","(5,)"
+multimodal/mm_sample_02.npz,multimodal,1909,pos_HYP,MI=0;STTC=1;HYP=1;CD=1;NORM=0,3,"(12, 5000)","(5,)"
+multimodal/mm_sample_03.npz,multimodal,75,pos_CD,MI=0;STTC=1;HYP=0;CD=1;NORM=0,2,"(12, 5000)","(5,)"
+multimodal/mm_sample_04.npz,multimodal,789,pos_NORM,MI=0;STTC=0;HYP=0;CD=0;NORM=1,1,"(12, 5000)","(5,)"
+multimodal/mm_sample_05.npz,multimodal,334,all_zero,MI=0;STTC=0;HYP=0;CD=0;NORM=0,0,"(12, 5000)","(5,)"
+multimodal/mm_sample_06.npz,multimodal,1259,all_zero,MI=0;STTC=0;HYP=0;CD=0;NORM=0,0,"(12, 5000)","(5,)"
